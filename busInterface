@@ -1,0 +1,158 @@
+module busInterface(
+	 clk, 
+	 rst_n, 
+	 write,
+	 address,
+	 read,
+	 writedata,
+	 burstcount,
+	 beginbursttransfer,	
+	 lock,
+	 byte_en,
+	 waitRequest,
+	 done,
+	 data_read,
+	 data_write,
+	 rnw,
+	 start,
+	 bytes,
+	 address_access,
+	 readdata, 
+	 readdatavalid 
+);
+
+input clk,
+		rst_n,
+		waitRequest,
+		readdatavalid,
+		rnw,
+		start;
+input	[9:0] data_write;
+input	[3:0] bytes;
+input	[9:0] address_access;
+		
+output lock,
+		 done,
+		 beginbursttransfer,
+		 read,
+		 write;
+output [7:0] writedata;
+output [3:0] byte_en;
+output [7:0] readdata;
+output [9:0] data_read;
+output [9:0]address;
+output [9:0] burstcount;
+
+
+reg beginbursttransfer,
+	 burstcount,
+	 lock,
+	 read,
+	 write;
+reg [9:0] address;
+reg [7:0] writedata;
+reg [7:0] readdata; 
+reg [9:0] data_read;
+reg [3:0] byte_en;
+reg [1:0] state;
+reg [1:0] nextState;
+
+wire  stateActive,
+		done;
+
+parameter	stateIdle = 2'b00,
+				stateWait = 2'b01,
+				stateDone = 2'b10;
+				
+assign   stateActive = (state != stateIdle),
+			done = (state == stateDone);
+
+			
+
+always @(posedge clk)
+	if (rst_n) begin
+		state <= stateIdle;
+	end else begin
+		state <= nextState;
+	end
+
+
+	always @(*)
+		if(rst_n) begin
+			nextState = stateIdle;
+			address = 0;
+			read = 0;
+			write = 0;
+			writedata = 0;
+			readdata = 0;
+			lock = 0;
+			beginbursttransfer = 0;
+			burstcount = 0;
+	
+		end else begin
+			case (state)
+				stateIdle: begin
+					if(start) begin
+						address = address_access;
+						byte_en = bytes;
+						if(!rnw) begin
+							write = 1'b1;
+							read = 1'b0;	
+							writedata = data_write;
+							end else begin
+								read = 1'b1;
+								write = 1'b0;
+							end
+							
+							if(waitRequest) begin
+								nextState = stateWait;
+							end else begin
+								nextState = stateDone;
+							end
+							
+						end else begin
+							nextState = stateIdle;
+							address = 0;
+							read = 0;
+							write = 0;
+							writedata = 0;
+							data_read = 0;
+							lock = 0;
+							beginbursttransfer = 0;
+							burstcount = 0;
+						end
+					end //case stateIdle
+					
+					stateWait: begin
+						if(waitRequest) begin
+							nextState = stateWait;
+						end else begin
+							nextState = stateDone;
+						end
+					end
+					
+					stateDone: begin
+						if(rnw) begin
+							data_read = readdata;
+						end
+						nextState = stateIdle;
+					end
+					
+					default:begin
+						nextState = stateIdle;
+						address = 0;
+						read = 0; 
+						write = 0;
+						writedata = 0;
+						data_read = 0;
+						lock = 0;
+						beginbursttransfer = 0;
+						burstcount = 0;
+					end
+					
+					endcase //case(state)
+				end
+						
+			
+
+endmodule	
